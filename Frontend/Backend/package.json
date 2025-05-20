@@ -1,7 +1,7 @@
 {
   "name": "ecommerce-backend",
   "version": "1.0.0",
-  "description": "Ecommerce backend API",
+  "description": "eCommerce backend API",
   "main": "server.js",
   "scripts": {
     "start": "set NODE_ENV=production&& node server.js",
@@ -9,6 +9,17 @@
     "test": "jest",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
+  },
+  "vercel": {
+    "functions": {
+      "api/*.js": {
+        "runtime": "nodejs18.x"
+      }
+    },
+    "rewrites": [
+      { "source": "/api/(.*)", "destination": "/Backend/api/$1" },
+      { "source": "/(.*)", "destination": "/" }
+    ]
   },
   "keywords": [],
   "author": "",
