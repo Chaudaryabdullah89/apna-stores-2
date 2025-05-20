@@ -46,23 +46,27 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // CORS configuration
-const allowedOrigins = process.env.NODE_ENV === 'production' 
-  ? [process.env.FRONTEND_URL]
-  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
-
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With'],
-  exposedHeaders: ['Set-Cookie']
-}));
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+  exposedHeaders: ['Set-Cookie'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
+
+app.use(cors(corsOptions));
+
+// Add request logging middleware
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url}`, {
+    body: req.body,
+    headers: req.headers,
+    cookies: req.cookies
+  });
+  next();
+});
 
 // Session configuration
 app.use(session({
@@ -109,16 +113,35 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Database connection with retry logic
 const connectDB = async () => {
   try {
+    console.log('Attempting to connect to MongoDB...');
+    console.log('MongoDB URI:', process.env.MONGODB_URI ? 'Set' : 'Not Set');
+    
     await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
     });
-    console.log('Connected to MongoDB');
+    console.log('Connected to MongoDB successfully');
+
+    // Seed the database if it's empty
+    const Product = require('./models/Product');
+    const productCount = await Product.countDocuments();
+    if (productCount === 0) {
+      console.log('Database is empty, seeding products...');
+      const seedProducts = require('./seed/products');
+      await seedProducts();
+      console.log('Products seeded successfully');
+    }
   } catch (err) {
-    console.error('MongoDB connection error:', err);
+    console.error('MongoDB connection error details:', {
+      name: err.name,
+      message: err.message,
+      code: err.code,
+      stack: err.stack
+    });
     // Retry connection after 5 seconds
+    console.log('Retrying MongoDB connection in 5 seconds...');
     setTimeout(connectDB, 5000);
   }
 };
@@ -158,8 +181,6 @@ app.get('/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({ message: 'Welcome to the Ecommerce API' });
 });
-
-
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
